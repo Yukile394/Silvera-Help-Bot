@@ -8,9 +8,9 @@ const {
   PermissionFlagsBits 
 } = require('discord.js');
 
-// 🛠️ BURALARI KENDİ SUNUCUNA GÖRE DOLDUR!
-const YETKILI_ROL_ID = 'YETKILI_ROL_ID_BURAYA'; // Destek kanallarını görebilecek yetkili rolünün ID'si
-const KATEGORI_ID = 'KATEGORI_ID_BURAYA'; // Destek kanallarının açılacağı kategorinin ID'si
+// Sunucundan aldığımız ID'ler entegre edildi
+const YETKILI_ROL_ID = '1504120266782019634'; 
+const KATEGORI_ID = '1392629270546743378'; 
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -41,42 +41,43 @@ module.exports = {
       .setFooter({ text: 'Silvera Help' })
       .setTimestamp();
 
-    // Menüyü gönderiyoruz (ephemeral olmadığı için herkes görebilir)
+    // Menüyü gönderiyoruz (Herkes görebilir)
     const response = await interaction.reply({ embeds: [menuEmbed], components: [row] });
 
-    // Buton tıklamalarını dinlemek için sonsuz (veya uzun süreli) bir toplayıcı oluşturuyoruz
-    const collector = response.createMessageComponentCollector({ time: 0 }); // 0 = Sınırsız süre
+    // Buton etkileşimlerini dinlemek için toplayıcı
+    const collector = interaction.channel.createMessageComponentCollector({ time: 0 });
 
     collector.on('collect', async i => {
-      // Sadece "Destek Aç" butonuna basıldığında tetiklenir
+      
+      // ================= DESTEK AÇMA SÜRECİ =================
       if (i.customId === 'destek_ac') {
-        await i.deferReply({ ephemeral: true }); // İşlemin uzun sürebileceğini Discord'a bildiriyoruz
+        await i.deferReply({ ephemeral: true });
 
         const guild = i.guild;
 
         try {
-          // Özel destek kanalını oluşturuyoruz
+          // Özel destek kanalı oluşturuluyor
           const supportChannel = await guild.channels.create({
             name: `destek-${i.user.username}`,
             type: ChannelType.GuildText,
-            parent: KATEGORI_ID, // Kanalların açılacağı kategori
+            parent: KATEGORI_ID, 
             permissionOverwrites: [
               {
                 id: guild.roles.everyone.id,
-                deny: [PermissionFlagsBits.ViewChannel], // Herkese kapatıyoruz
+                deny: [PermissionFlagsBits.ViewChannel], // Herkese gizle
               },
               {
                 id: i.user.id,
-                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory], // Desteği açan kişiye açıyoruz
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory], // Desteği açana göster
               },
               {
                 id: YETKILI_ROL_ID,
-                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory], // Yetkililere açıyoruz
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory], // Yetkililere göster
               },
             ],
           });
 
-          // Açılan kanalın içindeki "Destek Kapat" butonu
+          // Destek kapatma butonu
           const closeRow = new ActionRowBuilder()
             .addComponents(
               new ButtonBuilder()
@@ -96,33 +97,28 @@ module.exports = {
             .setFooter({ text: 'Silvera Help' })
             .setTimestamp();
 
-          // Yeni açılan kanala mesajı gönderiyoruz
+          // Oluşturulan yeni kanala ilk mesaj ve kapatma butonu gönderiliyor
           await supportChannel.send({ content: `${i.user} | <@&${YETKILI_ROL_ID}>`, embeds: [channelEmbed], components: [closeRow] });
 
-          // Kişiye gizli mesaj olarak kanalın açıldığını söylüyoruz
+          // Komut butonuna basan kişiye gizli onay mesajı
           await i.editReply({ content: `✅ Destek talebiniz başarıyla oluşturuldu! Kanal: ${supportChannel}` });
 
         } catch (error) {
           console.error(error);
-          await i.editReply({ content: '❌ Destek kanalı oluşturulurken bir hata meydana geldi. Lütfen yetkililere bildirin.' });
+          await i.editReply({ content: '❌ Destek kanalı oluşturulurken bir hata meydana geldi. Botun gerekli yetkilere sahip olduğundan emin olun.' });
         }
       }
+
+      // ================= DESTEK KAPATMA SÜRECİ =================
+      if (i.customId === 'destek_kapat') {
+        await i.reply({ content: '🔒 Bu destek kanalı 5 saniye içinde kalıcı olarak siliniyor...' });
+        
+        // 5 saniye bekleyip kanalı imha ediyor
+        setTimeout(async () => {
+          await i.channel.delete().catch(() => null);
+        }, 5000);
+      }
+
     });
   },
 };
-
-// 🔒 Kapatma butonunu tetiklemek için Client (Bot) seviyesinde bir dinleyici gerekir.
-// Eğer ana bot dosyanızda (index.js / main.js) interactionCreate eventiniz varsa, 
-// destek kapatma butonunu çalıştırmak için aşağıdaki kodu event'in içine eklemeniz yeterlidir:
-/*
-client.on('interactionCreate', async interaction => {
-  if (!interaction.isButton()) return;
-  
-  if (interaction.customId === 'destek_kapat') {
-    await interaction.reply({ content: '🔒 Bu destek kanalı 5 saniye içinde siliniyor...' });
-    setTimeout(async () => {
-      await interaction.channel.delete().catch(() => null);
-    }, 5000);
-  }
-});
-*/
