@@ -1,0 +1,23 @@
+{
+  "name": "silvera-help-bot",
+  "version": "1.0.0",
+  "description": "Silvera Help - 7/24 Discord Bot",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "deploy-commands": "node src/deploy-commands.js",
+    "lint": "eslint src/**/*.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "nodemon": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
