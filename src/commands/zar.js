@@ -1,101 +1,128 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { 
+  SlashCommandBuilder, 
+  EmbedBuilder, 
+  ActionRowBuilder, 
+  ButtonBuilder, 
+  ButtonStyle, 
+  ChannelType, 
+  PermissionFlagsBits 
+} = require('discord.js');
+
+// 🛠️ BURALARI KENDİ SUNUCUNA GÖRE DOLDUR!
+const YETKILI_ROL_ID = 'YETKILI_ROL_ID_BURAYA'; // Destek kanallarını görebilecek yetkili rolünün ID'si
+const KATEGORI_ID = 'KATEGORI_ID_BURAYA'; // Destek kanallarının açılacağı kategorinin ID'si
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('zar')
-    .setDescription('Zar atar')
-    .addIntegerOption(opt =>
-      opt.setName('yuzler')
-        .setDescription('Zarın kaç yüzü olacak (varsayılan: 6)')
-        .setMinValue(2)
-        .setMaxValue(1000)
-        .setRequired(false)
-    ),
+    .setName('destek')
+    .setDescription('Destek sistemini başlatır.'),
 
   async execute(interaction) {
-    const sides = interaction.options.getInteger('yuzler') ?? 6;
-
-    // Menü için Butonları Oluşturuyoruz
+    // Herkesin görebileceği "Destek Aç" butonu
     const row = new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder()
-          .setCustomId(`zar_oyna_${sides}`)
-          .setLabel('🎲 Zar Oyna')
-          .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder()
-          .setCustomId(`zar_paylas_${sides}`)
-          .setLabel('📢 Zar Paylaş')
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId(`zar_iste_${sides}`)
-          .setLabel('🤝 Zar İste')
-          .setStyle(ButtonStyle.Secondary)
+          .setCustomId('destek_ac')
+          .setLabel('🎫 Destek Aç')
+          .setStyle(ButtonStyle.Success)
       );
 
-    // İlk Menü Embed'i
+    // 5 Satırlık Açıklama Menüsü Embed'i
     const menuEmbed = new EmbedBuilder()
-      .setColor(0xf39c12)
-      .setTitle('🎲 Zar Menüsü')
-      .setDescription(`**${interaction.user.username}**, d${sides} zarı için bir işlem seçin:`)
-      .addFields(
-        { name: '🎲 Zar Oyna', value: 'Kendi kendinize zar atarsınız.', inline: true },
-        { name: '📢 Zar Paylaş', value: 'Attığınız zarı kanalda paylaşırsınız.', inline: true },
-        { name: '🤝 Zar İste', value: 'Başka birinden zar atmasını istersiniz.', inline: true }
+      .setColor(0x3498db)
+      .setTitle('✨ Silvera Destek Sistemi')
+      .setDescription(
+        `👋 Merhaba! Yaşadığınız sorunları çözmek için buradayız.\n` +
+        `📝 Lütfen aşağıdaki butona tıklayarak bir destek talebi oluşturun.\n` +
+        `⏳ Talebiniz açıldıktan sonra yetkililerimiz en kısa sürede dönüş yapacaktır.\n` +
+        `⚠️ Gereksiz yere destek talebi açmak ve yetkilileri etiketlemek yasaktır.\n` +
+        `🤝 Silvera ekibi olarak size yardımcı olmaktan mutluluk duyarız!`
       )
       .setFooter({ text: 'Silvera Help' })
       .setTimestamp();
 
-    // Menüyü gönderiyoruz (Herkes görebilir)
+    // Menüyü gönderiyoruz (ephemeral olmadığı için herkes görebilir)
     const response = await interaction.reply({ embeds: [menuEmbed], components: [row] });
 
-    // Buton tıklamalarını yakalamak için collector (toplayıcı) oluşturuyoruz (Zaman aşımı: 10 dakika)
-    const collector = response.createMessageComponentCollector({ time: 600000 });
+    // Buton tıklamalarını dinlemek için sonsuz (veya uzun süreli) bir toplayıcı oluşturuyoruz
+    const collector = response.createMessageComponentCollector({ time: 0 }); // 0 = Sınırsız süre
 
     collector.on('collect', async i => {
-      // Buton kimliklerini ve zar yüzünü ayrıştırıyoruz
-      const [action, type, sideCount] = i.customId.split('_');
-      const currentSides = parseInt(sideCount);
-      const result = Math.floor(Math.random() * currentSides) + 1;
+      // Sadece "Destek Aç" butonuna basıldığında tetiklenir
+      if (i.customId === 'destek_ac') {
+        await i.deferReply({ ephemeral: true }); // İşlemin uzun sürebileceğini Discord'a bildiriyoruz
 
-      let resultEmbed = new EmbedBuilder()
-        .setColor(0xf39c12)
-        .setFooter({ text: 'Silvera Help' })
-        .setTimestamp();
+        const guild = i.guild;
 
-      if (type === 'oyna') {
-        resultEmbed
-          .setTitle('🎲 Zar Oynandı!')
-          .setDescription(`**${i.user.username}** kendi için d${currentSides} zar attı!`)
-          .addFields({ name: '🎯 Sonuç', value: `**${result}** / ${currentSides}` });
-        
-        // Sadece zarı oynayan kişinin görmesini istersen ephemral yapabilirsin, 
-        // ama herkes görsün dediğin için normal yanıt olarak kanala gönderiyoruz.
-        await i.reply({ embeds: [resultEmbed] });
+        try {
+          // Özel destek kanalını oluşturuyoruz
+          const supportChannel = await guild.channels.create({
+            name: `destek-${i.user.username}`,
+            type: ChannelType.GuildText,
+            parent: KATEGORI_ID, // Kanalların açılacağı kategori
+            permissionOverwrites: [
+              {
+                id: guild.roles.everyone.id,
+                deny: [PermissionFlagsBits.ViewChannel], // Herkese kapatıyoruz
+              },
+              {
+                id: i.user.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory], // Desteği açan kişiye açıyoruz
+              },
+              {
+                id: YETKILI_ROL_ID,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory], // Yetkililere açıyoruz
+              },
+            ],
+          });
 
-      } else if (type === 'paylas') {
-        resultEmbed
-          .setTitle('📢 Zar Paylaşıldı!')
-          .setDescription(`**${i.user.username}** ortaya bir d${currentSides} zar fırlattı!`)
-          .addFields({ name: '🎯 Sonuç', value: `**${result}** / ${currentSides}` });
-        
-        await i.reply({ embeds: [resultEmbed] });
+          // Açılan kanalın içindeki "Destek Kapat" butonu
+          const closeRow = new ActionRowBuilder()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId('destek_kapat')
+                .setLabel('🔒 Desteği Kapat')
+                .setStyle(ButtonStyle.Danger)
+            );
 
-      } else if (type === 'iste') {
-        resultEmbed
-          .setTitle('🤝 Zar İstendi!')
-          .setDescription(`**${i.user.username}** herkesten bir d${currentSides} zar atmasını istiyor!\n\nKim atmak ister?`)
-          .addFields({ name: '🎲 İlk Atış Sonucu (Uğurlu)', value: `**${result}** / ${currentSides}` });
-        
-        await i.reply({ embeds: [resultEmbed] });
+          const channelEmbed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('🎫 Destek Kanalı Açıldı!')
+            .setDescription(
+              `Merhaba ${i.user}, destek talebiniz başarıyla oluşturuldu.\n` +
+              `Yetkililerimiz en kısa sürede sizinle ilgilenecektir.\n\n` +
+              `**İşiniz bittiğinde aşağıdaki butona tıklayarak kanalı kapatabilirsiniz.**`
+            )
+            .setFooter({ text: 'Silvera Help' })
+            .setTimestamp();
+
+          // Yeni açılan kanala mesajı gönderiyoruz
+          await supportChannel.send({ content: `${i.user} | <@&${YETKILI_ROL_ID}>`, embeds: [channelEmbed], components: [closeRow] });
+
+          // Kişiye gizli mesaj olarak kanalın açıldığını söylüyoruz
+          await i.editReply({ content: `✅ Destek talebiniz başarıyla oluşturuldu! Kanal: ${supportChannel}` });
+
+        } catch (error) {
+          console.error(error);
+          await i.editReply({ content: '❌ Destek kanalı oluşturulurken bir hata meydana geldi. Lütfen yetkililere bildirin.' });
+        }
       }
-    });
-
-    // Zaman aşımı olduğunda butonları devre dışı bırakır
-    collector.on('end', () => {
-      const disabledRow = new ActionRowBuilder().addComponents(
-        row.components.map(button => ButtonBuilder.from(button).setDisabled(true))
-      );
-      interaction.editReply({ components: [disabledRow] }).catch(() => null);
     });
   },
 };
+
+// 🔒 Kapatma butonunu tetiklemek için Client (Bot) seviyesinde bir dinleyici gerekir.
+// Eğer ana bot dosyanızda (index.js / main.js) interactionCreate eventiniz varsa, 
+// destek kapatma butonunu çalıştırmak için aşağıdaki kodu event'in içine eklemeniz yeterlidir:
+/*
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isButton()) return;
+  
+  if (interaction.customId === 'destek_kapat') {
+    await interaction.reply({ content: '🔒 Bu destek kanalı 5 saniye içinde siliniyor...' });
+    setTimeout(async () => {
+      await interaction.channel.delete().catch(() => null);
+    }, 5000);
+  }
+});
+*/
