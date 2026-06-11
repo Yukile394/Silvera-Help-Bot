@@ -42,34 +42,10 @@ jobs:
             node --check "$f" && echo "✅ $f OK"
           done
 
-  deploy:
-    name: 🚀 Sunucuya Deploy Et
-    runs-on: ubuntu-latest
-    needs: lint
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    steps:
-      - name: 📥 Kodu İndir
-        uses: actions/checkout@v4
-
-      - name: 🔑 SSH ile Bağlan ve Deploy Et
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT || 22 }}
-          script: |
-            cd ~/silvera-bot
-            git pull origin main
-            npm install --omit=dev
-            pm2 restart silvera-help-bot --update-env || pm2 start src/index.js --name silvera-help-bot
-            pm2 save
-
   deploy-commands:
     name: 📋 Slash Komutları Deploy Et
     runs-on: ubuntu-latest
-    needs: deploy
+    needs: lint
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
@@ -89,32 +65,3 @@ jobs:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           CLIENT_ID: ${{ secrets.CLIENT_ID }}
         run: node src/deploy-commands.js
-
-  notify:
-    name: 📣 Discord Bildirimi
-    runs-on: ubuntu-latest
-    needs: [deploy, deploy-commands]
-    if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    steps:
-      - name: 📣 Başarılı
-        if: needs.deploy.result == 'success'
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: success
-          title: "✅ Silvera Help Bot Deploy Edildi!"
-          description: "**Yapan:** ${{ github.actor }}"
-          color: 0x2ecc71
-          username: "GitHub Actions"
-
-      - name: 📣 Başarısız
-        if: needs.deploy.result == 'failure'
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: failure
-          title: "❌ Deploy Başarısız!"
-          description: "Lütfen Actions loglarını kontrol edin."
-          color: 0xe74c3c
-          username: "GitHub Actions"
