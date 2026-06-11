@@ -5,15 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch:   # Elle tetikleme
+  workflow_dispatch:
 
 env:
   NODE_VERSION: '20'
 
 jobs:
-  # ─────────────────────────────────────────
-  # 1. LINT & TEST
-  # ─────────────────────────────────────────
   lint:
     name: 🔍 Lint & Syntax Check
     runs-on: ubuntu-latest
@@ -26,10 +23,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
 
       - name: 📦 Bağımlılıkları Yükle
-        run: npm ci
+        run: npm install
 
       - name: 🔍 Syntax Kontrolü
         run: node --check src/index.js && node --check src/deploy-commands.js
@@ -46,9 +42,6 @@ jobs:
             node --check "$f" && echo "✅ $f OK"
           done
 
-  # ─────────────────────────────────────────
-  # 2. DEPLOY (sadece main'e push'ta)
-  # ─────────────────────────────────────────
   deploy:
     name: 🚀 Sunucuya Deploy Et
     runs-on: ubuntu-latest
@@ -67,26 +60,12 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
           script: |
-            echo "📂 Proje dizinine geçiliyor..."
             cd ~/silvera-bot
-
-            echo "📥 Son kodu çekiliyor..."
             git pull origin main
-
-            echo "📦 Bağımlılıklar güncelleniyor..."
-            npm ci --omit=dev
-
-            echo "🔄 Bot yeniden başlatılıyor (PM2)..."
+            npm install --omit=dev
             pm2 restart silvera-help-bot --update-env || pm2 start src/index.js --name silvera-help-bot
-
-            echo "💾 PM2 listesi kaydediliyor..."
             pm2 save
 
-            echo "✅ Deploy tamamlandı!"
-
-  # ─────────────────────────────────────────
-  # 3. SLASH KOMUT DEPLOY (sadece main'e push'ta)
-  # ─────────────────────────────────────────
   deploy-commands:
     name: 📋 Slash Komutları Deploy Et
     runs-on: ubuntu-latest
@@ -101,10 +80,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
 
       - name: 📦 Bağımlılıkları Yükle
-        run: npm ci
+        run: npm install
 
       - name: 📋 Slash Komutları Kaydet
         env:
@@ -112,9 +90,6 @@ jobs:
           CLIENT_ID: ${{ secrets.CLIENT_ID }}
         run: node src/deploy-commands.js
 
-  # ─────────────────────────────────────────
-  # 4. DISCORD BİLDİRİM
-  # ─────────────────────────────────────────
   notify:
     name: 📣 Discord Bildirimi
     runs-on: ubuntu-latest
@@ -122,31 +97,24 @@ jobs:
     if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: 📣 Başarılı Deploy Bildirimi
+      - name: 📣 Başarılı
         if: needs.deploy.result == 'success'
         uses: sarisia/actions-status-discord@v1
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
           status: success
           title: "✅ Silvera Help Bot Deploy Edildi!"
-          description: |
-            **Branch:** `main`
-            **Commit:** `${{ github.sha }}`
-            **Yapan:** ${{ github.actor }}
+          description: "**Yapan:** ${{ github.actor }}"
           color: 0x2ecc71
           username: "GitHub Actions"
 
-      - name: 📣 Başarısız Deploy Bildirimi
+      - name: 📣 Başarısız
         if: needs.deploy.result == 'failure'
         uses: sarisia/actions-status-discord@v1
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
           status: failure
-          title: "❌ Silvera Help Bot Deploy Başarısız!"
-          description: |
-            **Branch:** `main`
-            **Commit:** `${{ github.sha }}`
-            **Yapan:** ${{ github.actor }}
-            Lütfen Actions loglarını kontrol edin.
+          title: "❌ Deploy Başarısız!"
+          description: "Lütfen Actions loglarını kontrol edin."
           color: 0xe74c3c
           username: "GitHub Actions"
